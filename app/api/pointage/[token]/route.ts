@@ -16,11 +16,12 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
      FROM qr_codes qr
      JOIN apartments a ON a.id = qr.apartment_id
      LEFT JOIN cleaning_sessions cs ON cs.apartment_id = a.id
-       AND cs.status IN ('planned','in_progress')
        AND DATE(cs.planned_start) = CURRENT_DATE
      LEFT JOIN cleaners cl ON cl.id = cs.cleaner_id
      WHERE qr.token = $1 AND a.is_active = true
-     ORDER BY cs.planned_start ASC NULLS LAST
+     ORDER BY
+       CASE cs.status WHEN 'in_progress' THEN 1 WHEN 'planned' THEN 2 WHEN 'completed' THEN 3 ELSE 4 END ASC,
+       cs.planned_start ASC NULLS LAST
      LIMIT 1`,
     [params.token]
   )
