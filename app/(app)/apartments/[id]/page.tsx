@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Copy, QrCode, Calendar, Sparkles, Package, MessageSquare, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Copy, QrCode, Calendar, Sparkles, Package, MessageSquare, ExternalLink, Download } from 'lucide-react'
+import QRCodeLib from 'qrcode'
 
 interface AptDetail {
   apt: {
@@ -51,6 +52,7 @@ export default function ApartmentDetailPage() {
   const [data, setData] = useState<AptDetail | null>(null)
   const [tab, setTab] = useState('calendrier')
   const [loading, setLoading] = useState(true)
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
 
   useEffect(() => {
@@ -58,6 +60,14 @@ export default function ApartmentDetailPage() {
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false) })
   }, [id])
+
+  useEffect(() => {
+    if (tab === 'qr' && data?.qr) {
+      const url = `${appUrl}/pointage/${data.qr.token}`
+      QRCodeLib.toDataURL(url, { width: 220, margin: 2, color: { dark: '#1E2D40', light: '#ffffff' } })
+        .then(setQrDataUrl)
+    }
+  }, [tab, data, appUrl])
 
   if (loading) {
     return (
@@ -258,21 +268,20 @@ export default function ApartmentDetailPage() {
                       display: 'inline-block', padding: 20, background: '#fff',
                       border: '1px solid var(--line)', borderRadius: 12, marginBottom: 20,
                     }}>
-                      {/* QR placeholder visuel */}
-                      <div style={{
-                        width: 160, height: 160,
-                        background: 'repeating-linear-gradient(0deg, #1E2D40 0px, #1E2D40 8px, #fff 8px, #fff 16px), repeating-linear-gradient(90deg, #1E2D40 0px, #1E2D40 8px, #fff 8px, #fff 16px)',
-                        borderRadius: 4,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 24,
-                      }}>
-                        <div style={{ background: '#fff', padding: 8, borderRadius: 6 }}>⚡</div>
-                      </div>
+                      {qrDataUrl
+                        ? <img src={qrDataUrl} alt="QR Code pointage" width={220} height={220} style={{ display: 'block' }} />
+                        : <div style={{ width: 220, height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)' }}>Génération…</div>
+                      }
                     </div>
                     <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
                       <button className="btn btn-secondary" onClick={() => { if (qrUrl) navigator.clipboard.writeText(qrUrl) }}>
                         <Copy size={14} /> Copier le lien
                       </button>
+                      {qrDataUrl && (
+                        <a href={qrDataUrl} download={`qr-${apt.name}.png`} className="btn btn-secondary">
+                          <Download size={14} /> Télécharger
+                        </a>
+                      )}
                       {qrUrl && (
                         <a href={qrUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary">
                           <ExternalLink size={14} /> Ouvrir la page
