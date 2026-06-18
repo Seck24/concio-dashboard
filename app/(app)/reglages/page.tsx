@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Settings, User, Plus, Trash2, Save } from 'lucide-react'
+import { Settings, User, Plus, Trash2, Save, Bot } from 'lucide-react'
 
 interface Cleaner { id: string; name: string; whatsapp: string }
 interface Rules {
@@ -9,14 +9,19 @@ interface Rules {
   late_checkout_until?: string; late_checkout_fee: number
   pets_allowed: boolean; parties_allowed: boolean; extra_notes?: string
 }
-interface Tenant { name: string; email: string; whatsapp?: string; plan: string }
+interface Tenant {
+  name: string; email: string; whatsapp?: string; plan: string
+  host_name?: string; ton_de_voix?: string; exemple_messages?: string
+}
+interface AiConfig { host_name: string; ton_de_voix: string; exemple_messages: string }
 
 export default function ReglagesPage() {
   const [tenant, setTenant] = useState<Tenant | null>(null)
   const [rules, setRules] = useState<Rules | null>(null)
   const [cleaners, setCleaners] = useState<Cleaner[]>([])
   const [saving, setSaving] = useState<string | null>(null)
-  const [tab, setTab] = useState<'profil' | 'regles' | 'prestataires'>('profil')
+  const [tab, setTab] = useState<'profil' | 'regles' | 'prestataires' | 'agent_ia'>('profil')
+  const [aiConfig, setAiConfig] = useState<AiConfig>({ host_name: '', ton_de_voix: '', exemple_messages: '' })
 
   // New cleaner form
   const [newCleaner, setNewCleaner] = useState({ name: '', whatsapp: '' })
@@ -29,6 +34,11 @@ export default function ReglagesPage() {
         pets_allowed: false, parties_allowed: false,
       })
       setCleaners(d.cleaners ?? [])
+      setAiConfig({
+        host_name: d.tenant?.host_name ?? '',
+        ton_de_voix: d.tenant?.ton_de_voix ?? '',
+        exemple_messages: d.tenant?.exemple_messages ?? '',
+      })
     })
   }, [])
 
@@ -70,6 +80,16 @@ export default function ReglagesPage() {
     setSaving(null)
   }
 
+  async function saveAiConfig() {
+    setSaving('ai')
+    await fetch('/api/reglages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'update_ai_config', ...aiConfig }),
+    })
+    setSaving(null)
+  }
+
   async function removeCleaner(id: string) {
     await fetch('/api/reglages', {
       method: 'POST',
@@ -94,6 +114,7 @@ export default function ReglagesPage() {
             { key: 'profil',        label: 'Profil' },
             { key: 'regles',        label: 'Règles tarifaires' },
             { key: 'prestataires',  label: 'Prestataires' },
+            { key: 'agent_ia',      label: '✦ Agent IA' },
           ].map(t => (
             <button key={t.key} className={`tab-btn${tab === t.key ? ' active' : ''}`} onClick={() => setTab(t.key as typeof tab)}>
               {t.label}
@@ -185,6 +206,59 @@ export default function ReglagesPage() {
                 <button className="btn btn-primary" onClick={saveRules} disabled={saving === 'regles'}>
                   <Save size={15} /> {saving === 'regles' ? 'Enregistrement…' : 'Enregistrer les règles'}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* AGENT IA */}
+        {tab === 'agent_ia' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 600 }}>
+            <div className="panel">
+              <div className="panel-h" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Bot size={18} style={{ color: 'var(--blue)' }} />
+                <h3>Configuration de l'agent IA</h3>
+              </div>
+              <div className="panel-b" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                <p style={{ fontSize: 13.5, color: 'var(--ink-2)', margin: 0 }}>
+                  L'agent IA utilise ces informations pour générer des messages de bienvenue personnalisés pour chaque voyageur.
+                </p>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Votre prénom (affiché aux voyageurs)</label>
+                  <input
+                    className="form-input"
+                    placeholder="Ex: Sophie"
+                    value={aiConfig.host_name}
+                    onChange={e => setAiConfig(p => ({ ...p, host_name: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Ton de voix</label>
+                  <input
+                    className="form-input"
+                    placeholder="Ex: chaleureux et professionnel, comme un ami qui accueille"
+                    value={aiConfig.ton_de_voix}
+                    onChange={e => setAiConfig(p => ({ ...p, ton_de_voix: e.target.value }))}
+                  />
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 4 }}>
+                    Décrivez votre style de communication pour que l'IA s'adapte à votre personnalité.
+                  </div>
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Exemples de vos messages habituels</label>
+                  <textarea
+                    className="form-input"
+                    rows={6}
+                    placeholder="Collez ici 1 à 3 exemples de messages de bienvenue que vous envoyez habituellement à vos voyageurs. L'IA s'en inspirera pour reproduire votre style."
+                    value={aiConfig.exemple_messages}
+                    onChange={e => setAiConfig(p => ({ ...p, exemple_messages: e.target.value }))}
+                  />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button className="btn btn-primary" onClick={saveAiConfig} disabled={saving === 'ai'}>
+                    <Save size={15} /> {saving === 'ai' ? 'Enregistrement…' : 'Enregistrer'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
