@@ -36,6 +36,10 @@ export async function register() {
       CREATE INDEX IF NOT EXISTS idx_conversations_tenant ON conversations(tenant_id);
       CREATE INDEX IF NOT EXISTS idx_conversations_phone ON conversations(guest_phone);
       CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, sent_at);
+
+      ALTER TABLE tenants ADD COLUMN IF NOT EXISTS carnet_hote text;
+      ALTER TABLE apartments ADD COLUMN IF NOT EXISTS carnet_appartement text;
+      ALTER TABLE messages ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'sent';
     `)
     console.log('[Concio] DB migration OK')
   }

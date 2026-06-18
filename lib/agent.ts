@@ -3,84 +3,56 @@ import Anthropic from '@anthropic-ai/sdk'
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export interface AgentContext {
-  tenant: {
-    host_name?: string
-    ton_de_voix?: string
-  }
-  apartment: {
-    name: string
-    address?: string
-    access_code?: string
-    access_instructions?: string
-    drive_link_photos?: string
-    city_info?: string
-    activities_nearby?: string
-    parking_tips?: string
-  }
-  reservation: {
-    guest_name?: string
-    checkin: string
-    checkout: string
-  }
-  rules?: {
-    early_checkin_from?: string
-    late_checkout_until?: string
-    pets_allowed?: boolean
-    extra_notes?: string
-  }
+  carnet_hote?: string          // tout ce que l'hôte a mis dans son carnet global
+  carnet_appartement?: string   // tout ce que l'hôte a mis pour cet appartement
+  apartment_name: string
+  guest_name?: string
+  checkin?: string
+  checkout?: string
   history: Array<{ role: 'user' | 'assistant'; content: string }>
   newMessage: string
 }
 
 export async function agentReply(ctx: AgentContext): Promise<string> {
-  const hostName = ctx.tenant.host_name?.trim() || 'votre hôte'
-  const tone = ctx.tenant.ton_de_voix?.trim() || 'chaleureux, naturel et professionnel'
-  const checkin = new Date(ctx.reservation.checkin).toLocaleDateString('fr-FR', {
-    weekday: 'long', day: 'numeric', month: 'long',
-  })
-  const checkout = new Date(ctx.reservation.checkout).toLocaleDateString('fr-FR', {
-    day: 'numeric', month: 'long',
-  })
+  const aptName = ctx.apartment_name
+  const guestName = ctx.guest_name ?? 'le/la voyageur(se)'
 
-  const lines = [
-    `Tu es l'assistant personnel de ${hostName}, hôte de location courte durée.`,
-    `Tu réponds aux messages des voyageurs en son nom, avec son ton et sa personnalité.`,
-    `Ton de voix : ${tone}.`,
+  const checkinStr = ctx.checkin
+    ? new Date(ctx.checkin).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
+    : ''
+  const checkoutStr = ctx.checkout
+    ? new Date(ctx.checkout).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
+    : ''
+
+  const systemLines = [
+    `Tu es l'assistant personnel d'un hôte de location courte durée. Tu réponds aux messages des voyageurs en son nom, avec son style et sa personnalité.`,
     ``,
-    `LOGEMENT :`,
-    `- Nom : ${ctx.apartment.name}`,
-    ctx.apartment.address ? `- Adresse : ${ctx.apartment.address}` : '',
-    ctx.apartment.access_code ? `- Code d'accès : ${ctx.apartment.access_code}` : '',
-    ctx.apartment.access_instructions ? `- Accès : ${ctx.apartment.access_instructions}` : '',
-    ctx.apartment.drive_link_photos ? `- Photos d'accès : ${ctx.apartment.drive_link_photos}` : '',
-    ctx.apartment.city_info ? `\nVILLE :\n${ctx.apartment.city_info}` : '',
-    ctx.apartment.activities_nearby ? `\nACTIVITÉS PROCHES :\n${ctx.apartment.activities_nearby}` : '',
-    ctx.apartment.parking_tips ? `\nPARKING :\n${ctx.apartment.parking_tips}` : '',
+    `LOGEMENT : ${aptName}`,
+    checkinStr ? `RÉSERVATION : arrivée ${checkinStr}${checkoutStr ? `, départ ${checkoutStr}` : ''}, voyageur : ${guestName}` : `VOYAGEUR : ${guestName}`,
     ``,
-    `RÉSERVATION :`,
-    `- Voyageur : ${ctx.reservation.guest_name ?? 'votre voyageur'}`,
-    `- Arrivée : ${checkin}`,
-    `- Départ : ${checkout}`,
   ]
 
-  if (ctx.rules) {
-    lines.push(``, `RÈGLES :`)
-    if (ctx.rules.early_checkin_from) lines.push(`- Early check-in dès ${ctx.rules.early_checkin_from}`)
-    if (ctx.rules.late_checkout_until) lines.push(`- Late check-out jusqu'à ${ctx.rules.late_checkout_until}`)
-    if (ctx.rules.pets_allowed !== undefined) lines.push(`- Animaux : ${ctx.rules.pets_allowed ? 'acceptés' : 'non acceptés'}`)
-    if (ctx.rules.extra_notes) lines.push(`- Note : ${ctx.rules.extra_notes}`)
+  if (ctx.carnet_hote?.trim()) {
+    systemLines.push(`CARNET DE BORD DE L'HÔTE (style, règles générales, exemples de messages) :`)
+    systemLines.push(ctx.carnet_hote.trim())
+    systemLines.push(``)
   }
 
-  lines.push(
-    ``,
+  if (ctx.carnet_appartement?.trim()) {
+    systemLines.push(`CARNET DE BORD DU LOGEMENT (accès, parking, activités, conseils, liens photos...) :`)
+    systemLines.push(ctx.carnet_appartement.trim())
+    systemLines.push(``)
+  }
+
+  systemLines.push(
     `CONSIGNES :`,
-    `- Réponds de façon concise, naturelle, comme par SMS. Pas de longs pavés.`,
-    `- Signe du prénom de l'hôte (${hostName}).`,
-    `- Si tu ignores la réponse à une question, dis que tu vas vérifier.`,
-    `- Tu ne révèles jamais être un assistant IA.`,
+    `- Réponds de façon concise et naturelle, comme par SMS. Pas de longs pavés de texte.`,
+    `- Tu es l'hôte, pas un assistant IA — ne le mentionne jamais.`,
+    `- Si une question dépasse tes informations, dis que tu vas vérifier et revenir.`,
+    `- Pour les liens (photos, etc.) inclus-les directement dans le message si pertinent.`,
   )
 
-  const systemPrompt = lines.filter(l => l !== null && l !== undefined).join('\n')
+  const systemPrompt = systemLines.join('\n')
 
   const response = await claude.messages.create({
     model: 'claude-opus-4-8',

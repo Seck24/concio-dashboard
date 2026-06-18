@@ -8,7 +8,7 @@ export async function GET() {
   const tid = session.tenantId
 
   const [tenant, rules, cleaners, platforms] = await Promise.all([
-    query('SELECT id, name, email, whatsapp, plan, host_name, ton_de_voix, exemple_messages FROM tenants WHERE id = $1', [tid]),
+    query('SELECT id, name, email, whatsapp, plan, host_name, ton_de_voix, exemple_messages, carnet_hote FROM tenants WHERE id = $1', [tid]),
     query('SELECT * FROM rules WHERE tenant_id = $1', [tid]),
     query('SELECT * FROM cleaners WHERE tenant_id = $1 AND is_active = true ORDER BY name', [tid]),
     query('SELECT * FROM platforms ORDER BY name', []),
@@ -76,6 +76,11 @@ export async function POST(req: NextRequest) {
       'UPDATE tenants SET host_name = $1, ton_de_voix = $2, exemple_messages = $3 WHERE id = $4',
       [host_name ?? null, ton_de_voix ?? null, exemple_messages ?? null, tid]
     )
+    return NextResponse.json({ ok: true })
+  }
+
+  if (body.action === 'update_carnet_hote') {
+    await query('UPDATE tenants SET carnet_hote = $1 WHERE id = $2', [body.carnet_hote ?? null, tid])
     return NextResponse.json({ ok: true })
   }
 

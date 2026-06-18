@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Settings, User, Plus, Trash2, Save, Bot } from 'lucide-react'
+import { Settings, User, Plus, Trash2, Save, BookOpen } from 'lucide-react'
 
 interface Cleaner { id: string; name: string; whatsapp: string }
 interface Rules {
@@ -11,17 +11,16 @@ interface Rules {
 }
 interface Tenant {
   name: string; email: string; whatsapp?: string; plan: string
-  host_name?: string; ton_de_voix?: string; exemple_messages?: string
+  carnet_hote?: string
 }
-interface AiConfig { host_name: string; ton_de_voix: string; exemple_messages: string }
 
 export default function ReglagesPage() {
   const [tenant, setTenant] = useState<Tenant | null>(null)
   const [rules, setRules] = useState<Rules | null>(null)
   const [cleaners, setCleaners] = useState<Cleaner[]>([])
   const [saving, setSaving] = useState<string | null>(null)
-  const [tab, setTab] = useState<'profil' | 'regles' | 'prestataires' | 'agent_ia'>('profil')
-  const [aiConfig, setAiConfig] = useState<AiConfig>({ host_name: '', ton_de_voix: '', exemple_messages: '' })
+  const [tab, setTab] = useState<'profil' | 'regles' | 'prestataires' | 'carnet'>('profil')
+  const [carnetHote, setCarnetHote] = useState('')
 
   // New cleaner form
   const [newCleaner, setNewCleaner] = useState({ name: '', whatsapp: '' })
@@ -34,11 +33,7 @@ export default function ReglagesPage() {
         pets_allowed: false, parties_allowed: false,
       })
       setCleaners(d.cleaners ?? [])
-      setAiConfig({
-        host_name: d.tenant?.host_name ?? '',
-        ton_de_voix: d.tenant?.ton_de_voix ?? '',
-        exemple_messages: d.tenant?.exemple_messages ?? '',
-      })
+      setCarnetHote(d.tenant?.carnet_hote ?? '')
     })
   }, [])
 
@@ -80,12 +75,12 @@ export default function ReglagesPage() {
     setSaving(null)
   }
 
-  async function saveAiConfig() {
-    setSaving('ai')
+  async function saveCarnetHote() {
+    setSaving('carnet')
     await fetch('/api/reglages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'update_ai_config', ...aiConfig }),
+      body: JSON.stringify({ action: 'update_carnet_hote', carnet_hote: carnetHote }),
     })
     setSaving(null)
   }
@@ -114,7 +109,7 @@ export default function ReglagesPage() {
             { key: 'profil',        label: 'Profil' },
             { key: 'regles',        label: 'Règles tarifaires' },
             { key: 'prestataires',  label: 'Prestataires' },
-            { key: 'agent_ia',      label: '✦ Agent IA' },
+            { key: 'carnet',        label: '✦ Carnet de bord' },
           ].map(t => (
             <button key={t.key} className={`tab-btn${tab === t.key ? ' active' : ''}`} onClick={() => setTab(t.key as typeof tab)}>
               {t.label}
@@ -211,52 +206,43 @@ export default function ReglagesPage() {
           </div>
         )}
 
-        {/* AGENT IA */}
-        {tab === 'agent_ia' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 600 }}>
+        {/* CARNET DE BORD HÔTE */}
+        {tab === 'carnet' && (
+          <div style={{ maxWidth: 640 }}>
             <div className="panel">
               <div className="panel-h" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Bot size={18} style={{ color: 'var(--blue)' }} />
-                <h3>Configuration de l'agent IA</h3>
+                <BookOpen size={18} style={{ color: 'var(--blue)' }} />
+                <h3>Carnet de bord — Profil hôte</h3>
               </div>
-              <div className="panel-b" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                <p style={{ fontSize: 13.5, color: 'var(--ink-2)', margin: 0 }}>
-                  L'agent IA utilise ces informations pour générer des messages de bienvenue personnalisés pour chaque voyageur.
+              <div className="panel-b" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <p style={{ fontSize: 13.5, color: 'var(--ink-2)', margin: 0, lineHeight: 1.6 }}>
+                  Écrivez librement tout ce qui vous concerne en tant qu'hôte : votre prénom, votre style de communication, vos règles générales, des exemples de messages que vous envoyez habituellement, vos attentes vis-à-vis des voyageurs…
+                  <br /><br />
+                  L'agent IA s'en inspire pour adopter votre personnalité et rédiger à votre place.
                 </p>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Votre prénom (affiché aux voyageurs)</label>
-                  <input
-                    className="form-input"
-                    placeholder="Ex: Sophie"
-                    value={aiConfig.host_name}
-                    onChange={e => setAiConfig(p => ({ ...p, host_name: e.target.value }))}
-                  />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Ton de voix</label>
-                  <input
-                    className="form-input"
-                    placeholder="Ex: chaleureux et professionnel, comme un ami qui accueille"
-                    value={aiConfig.ton_de_voix}
-                    onChange={e => setAiConfig(p => ({ ...p, ton_de_voix: e.target.value }))}
-                  />
-                  <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 4 }}>
-                    Décrivez votre style de communication pour que l'IA s'adapte à votre personnalité.
-                  </div>
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Exemples de vos messages habituels</label>
-                  <textarea
-                    className="form-input"
-                    rows={6}
-                    placeholder="Collez ici 1 à 3 exemples de messages de bienvenue que vous envoyez habituellement à vos voyageurs. L'IA s'en inspirera pour reproduire votre style."
-                    value={aiConfig.exemple_messages}
-                    onChange={e => setAiConfig(p => ({ ...p, exemple_messages: e.target.value }))}
-                  />
-                </div>
+                <textarea
+                  className="form-input"
+                  rows={14}
+                  style={{ resize: 'vertical', lineHeight: 1.65, fontSize: 13.5 }}
+                  placeholder={`Exemple :
+Je m'appelle Sophie. J'accueille mes voyageurs de façon chaleureuse et professionnelle, comme un ami de confiance.
+
+Mes règles générales :
+- Animaux non acceptés
+- Pas de fêtes ni de soirées
+- Check-out avant 11h
+- Respect du voisinage après 22h
+
+Exemples de messages que j'envoie habituellement :
+"Bonjour Marie ! Ravie de vous accueillir 😊 Votre appartement vous attend le 15 juin..."
+
+Je réponds toujours rapidement. Si je tarde, c'est que je suis en déplacement.`}
+                  value={carnetHote}
+                  onChange={e => setCarnetHote(e.target.value)}
+                />
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <button className="btn btn-primary" onClick={saveAiConfig} disabled={saving === 'ai'}>
-                    <Save size={15} /> {saving === 'ai' ? 'Enregistrement…' : 'Enregistrer'}
+                  <button className="btn btn-primary" onClick={saveCarnetHote} disabled={saving === 'carnet'}>
+                    <Save size={15} /> {saving === 'carnet' ? 'Enregistrement…' : 'Enregistrer'}
                   </button>
                 </div>
               </div>

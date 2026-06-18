@@ -22,6 +22,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const [tenant, setTenant] = useState<{ name: string; email: string; plan: string } | null>(null)
   const [alertCount, setAlertCount] = useState(0)
+  const [pendingDrafts, setPendingDrafts] = useState(0)
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -36,6 +37,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     fetch('/api/alerts?status=pending&count=1')
       .then(r => r.ok ? r.json() : { count: 0 })
       .then(d => setAlertCount(d.count ?? 0))
+    fetch('/api/agent/pending')
+      .then(r => r.ok ? r.json() : { count: 0 })
+      .then(d => setPendingDrafts(d.count ?? 0))
   }, [pathname])
 
   async function logout() {
@@ -63,6 +67,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               {href === '/dashboard' && alertCount > 0 && (
                 <span className="badge badge-red" style={{ marginLeft: 'auto', padding: '1px 6px', fontSize: '11px' }}>
                   {alertCount}
+                </span>
+              )}
+              {href === '/messages' && pendingDrafts > 0 && (
+                <span className="badge badge-amber" style={{ marginLeft: 'auto', padding: '1px 6px', fontSize: '11px' }}>
+                  {pendingDrafts}
                 </span>
               )}
             </Link>

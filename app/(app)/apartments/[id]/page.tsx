@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Copy, QrCode, Calendar, Sparkles, Package, Bot, ExternalLink, Download, Send, Phone } from 'lucide-react'
+import { ArrowLeft, Copy, QrCode, Calendar, Sparkles, Package, BookOpen, Bot, ExternalLink, Download, Send, Phone, Save } from 'lucide-react'
 import QRCodeLib from 'qrcode'
 
 interface AptDetail {
@@ -30,7 +30,7 @@ const TABS = [
   { key: 'calendrier', label: 'Calendrier', icon: Calendar },
   { key: 'menages',    label: 'Ménages',    icon: Sparkles },
   { key: 'stock',      label: 'Stock',      icon: Package },
-  { key: 'agent',      label: 'Agent IA',   icon: Bot },
+  { key: 'carnet',     label: 'Carnet',      icon: BookOpen },
   { key: 'qr',         label: 'QR Code',    icon: QrCode },
 ]
 
@@ -60,8 +60,8 @@ export default function ApartmentDetailPage() {
   // Agent IA state
   const [phones, setPhones] = useState<Record<string, string>>({})
   const [startingConv, setStartingConv] = useState<string | null>(null)
-  const [agentInfo, setAgentInfo] = useState({ city_info: '', activities_nearby: '', parking_tips: '' })
-  const [savingAgent, setSavingAgent] = useState(false)
+  const [carnetAppt, setCarnetAppt] = useState('')
+  const [savingCarnet, setSavingCarnet] = useState(false)
 
   useEffect(() => {
     fetch(`/api/apartments/${id}`)
@@ -70,11 +70,7 @@ export default function ApartmentDetailPage() {
         setData(d)
         setLoading(false)
         if (d.apt) {
-          setAgentInfo({
-            city_info: d.apt.city_info ?? '',
-            activities_nearby: d.apt.activities_nearby ?? '',
-            parking_tips: d.apt.parking_tips ?? '',
-          })
+          setCarnetAppt(d.apt.carnet_appartement ?? '')
           // Pre-fill phone numbers from existing reservations
           const p: Record<string, string> = {}
           for (const r of (d.reservations ?? [])) {
@@ -141,14 +137,14 @@ export default function ApartmentDetailPage() {
     }
   }
 
-  async function saveAgentInfo() {
-    setSavingAgent(true)
+  async function saveCarnet() {
+    setSavingCarnet(true)
     await fetch(`/api/apartments/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(agentInfo),
+      body: JSON.stringify({ carnet_appartement: carnetAppt }),
     })
-    setSavingAgent(false)
+    setSavingCarnet(false)
   }
 
   return (
@@ -244,7 +240,7 @@ export default function ApartmentDetailPage() {
                           disabled={!phones[r.id] || startingConv === r.id}
                           onClick={() => startConversation(r.id)}
                         >
-                          {startingConv === r.id ? '…' : <><Send size={12} /> Démarrer</>}
+                          {startingConv === r.id ? '…' : <><Bot size={12} /> Préparer message</>}
                         </button>
                       </div>
                     )}
@@ -340,42 +336,46 @@ export default function ApartmentDetailPage() {
           </div>
         )}
 
-        {/* Agent IA tab */}
-        {tab === 'agent' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 600 }}>
+        {/* Carnet de bord tab */}
+        {tab === 'carnet' && (
+          <div style={{ maxWidth: 640 }}>
             <div className="panel">
-              <div className="panel-h"><h3>Informations ville & logement</h3></div>
+              <div className="panel-h" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <BookOpen size={17} style={{ color: 'var(--blue)' }} />
+                <h3>Carnet de bord — {apt.name}</h3>
+              </div>
               <div className="panel-b" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <p style={{ fontSize: 13, color: 'var(--ink-2)', margin: 0 }}>
-                  L'agent IA utilise ces informations pour répondre aux questions des voyageurs sur la ville, les activités et le stationnement.
+                <p style={{ fontSize: 13.5, color: 'var(--ink-2)', margin: 0, lineHeight: 1.6 }}>
+                  Écrivez tout ce que votre agent doit savoir sur ce logement : accès, code, parking, WiFi, activités proches, conseils arrivée tardive ou départ, photos d'indication, règles spécifiques, liens utiles…
+                  <br /><br />
+                  Pas besoin de structure. L'agent comprend du texte libre.
                 </p>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Description de la ville / du quartier</label>
-                  <textarea className="form-input" rows={4}
-                    placeholder="Ex: L'appartement est situé au cœur d'Abidjan, dans le quartier Cocody. À 10 min à pied du Plateau, le quartier des affaires. Transports en commun à 200m..."
-                    value={agentInfo.city_info}
-                    onChange={e => setAgentInfo(p => ({ ...p, city_info: e.target.value }))}
-                  />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Activités et lieux à proximité</label>
-                  <textarea className="form-input" rows={4}
-                    placeholder="Ex: - Restaurant Le Maquis (5 min à pied) - Centre commercial Cap Sud (10 min voiture) - Plage de Bassam (45 min) - Musée des civilisations (15 min)..."
-                    value={agentInfo.activities_nearby}
-                    onChange={e => setAgentInfo(p => ({ ...p, activities_nearby: e.target.value }))}
-                  />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Conseils parking / stationnement</label>
-                  <textarea className="form-input" rows={3}
-                    placeholder="Ex: Parking gratuit dans la rue le soir après 18h. Parking payant Carrefour Market à 200m (2€/h). Eviter la rue Nationale aux heures de pointe..."
-                    value={agentInfo.parking_tips}
-                    onChange={e => setAgentInfo(p => ({ ...p, parking_tips: e.target.value }))}
-                  />
-                </div>
+                <textarea
+                  className="form-input"
+                  rows={16}
+                  style={{ resize: 'vertical', lineHeight: 1.65, fontSize: 13.5 }}
+                  placeholder={`Exemple :
+
+Accès : Sonner au 3ème interphone "Dupont". Code porte entrée : A1234.
+Photos d'accès : https://drive.google.com/...
+Parking : Gratuit dans la rue après 18h. Parking payant à 200m (Centre Commercial).
+WiFi : ConcioNet / motdepasse123
+
+Arrivée tardive : Possible jusqu'à 23h, prévenir 2h avant.
+Départ : Laisser les clés sur la table de la cuisine. Poubelles à sortir.
+
+Activités proches :
+- Restaurant Chez Koffi (5 min à pied, très bon attiéké)
+- Marché de Cocody (10 min voiture, fermé le lundi)
+- Plage de Grand-Bassam (45 min, accès A100)
+
+Conseils : Eviter la rue Nationale entre 7h-9h et 17h-19h (embouteillages).`}
+                  value={carnetAppt}
+                  onChange={e => setCarnetAppt(e.target.value)}
+                />
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <button className="btn btn-primary" onClick={saveAgentInfo} disabled={savingAgent}>
-                    {savingAgent ? 'Enregistrement…' : 'Enregistrer'}
+                  <button className="btn btn-primary" onClick={saveCarnet} disabled={savingCarnet}>
+                    <Save size={15} /> {savingCarnet ? 'Enregistrement…' : 'Enregistrer'}
                   </button>
                 </div>
               </div>
