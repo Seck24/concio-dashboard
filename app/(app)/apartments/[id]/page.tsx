@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Copy, QrCode, Calendar, Sparkles, Package, MessageSquare, ExternalLink, Download } from 'lucide-react'
+import { ArrowLeft, Copy, QrCode, Calendar, Sparkles, Package, Bot, ExternalLink, Download, Send, Phone } from 'lucide-react'
 import QRCodeLib from 'qrcode'
 
 interface AptDetail {
@@ -10,10 +10,11 @@ interface AptDetail {
     id: string; name: string; address?: string; floor?: string
     access_code?: string; access_instructions?: string
     drive_link_photos?: string; expected_cleaning_min: number
+    city_info?: string; activities_nearby?: string; parking_tips?: string
     platforms: { slug: string; name: string; color: string; ical_url?: string }[]
   }
   reservations: Array<{
-    id: string; guest_name?: string; checkin: string; checkout: string
+    id: string; guest_name?: string; guest_phone?: string; checkin: string; checkout: string
     status: string; platform_slug?: string; platform_color?: string
   }>
   cleaning: Array<{
@@ -29,6 +30,7 @@ const TABS = [
   { key: 'calendrier', label: 'Calendrier', icon: Calendar },
   { key: 'menages',    label: 'Ménages',    icon: Sparkles },
   { key: 'stock',      label: 'Stock',      icon: Package },
+  { key: 'agent',      label: 'Agent IA',   icon: Bot },
   { key: 'qr',         label: 'QR Code',    icon: QrCode },
 ]
 
@@ -55,10 +57,32 @@ export default function ApartmentDetailPage() {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
 
+  // Agent IA state
+  const [phones, setPhones] = useState<Record<string, string>>({})
+  const [startingConv, setStartingConv] = useState<string | null>(null)
+  const [agentInfo, setAgentInfo] = useState({ city_info: '', activities_nearby: '', parking_tips: '' })
+  const [savingAgent, setSavingAgent] = useState(false)
+
   useEffect(() => {
     fetch(`/api/apartments/${id}`)
       .then(r => r.json())
-      .then(d => { setData(d); setLoading(false) })
+      .then(d => {
+        setData(d)
+        setLoading(false)
+        if (d.apt) {
+          setAgentInfo({
+            city_info: d.apt.city_info ?? '',
+            activities_nearby: d.apt.activities_nearby ?? '',
+            parking_tips: d.apt.parking_tips ?? '',
+          })
+          // Pre-fill phone numbers from existing reservations
+          const p: Record<string, string> = {}
+          for (const r of (d.reservations ?? [])) {
+            if (r.guest_phone) p[r.id] = r.guest_phone
+          }
+          setPhones(p)
+        }
+      })
   }, [id])
 
   useEffect(() => {
@@ -86,6 +110,46 @@ export default function ApartmentDetailPage() {
 
   const { apt, reservations, cleaning, consumables, qr } = data
   const qrUrl = qr ? `${appUrl}/pointage/${qr.token}` : null
+
+  async function savePhone(resvId: string) {
+    const phone = phones[resvId]
+    if (!phone) return
+    await fetch(`/api/reservations/${resvId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guest_phone: phone }),
+    })
+  }
+
+  async function startConversation(resvId: string) {
+    const phone = phones[resvId]
+    if (!phone) return
+    setStartingConv(resvId)
+    try {
+      await savePhone(resvId)
+      const res = await fetch('/api/agent/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reservation_id: resvId }),
+      })
+      const data = await res.json()
+      if (res.ok && data.conversation_id) {
+        router.push(`/messages/${data.conversation_id}`)
+      }
+    } finally {
+      setStartingConv(null)
+    }
+  }
+
+  async function saveAgentInfo() {
+    setSavingAgent(true)
+    await fetch(`/api/apartments/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(agentInfo),
+    })
+    setSavingAgent(false)
+  }
 
   return (
     <>
@@ -143,23 +207,47 @@ export default function ApartmentDetailPage() {
             {reservations.length === 0 ? (
               <div className="empty-state"><Calendar size={32} /><h3>Aucune réservation</h3><p>Les réservations s'importent via iCal.</p></div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {reservations.map(r => (
-                  <div key={r.id} className="card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
-                    {r.platform_slug && (
-                      <span className={`plat ${PLAT_CLASS[r.platform_slug] ?? ''}`}>
-                        {PLAT_LETTER[r.platform_slug] ?? r.platform_slug[0]}
-                      </span>
-                    )}
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--slate)' }}>{r.guest_name ?? 'Voyageur'}</div>
-                      <div style={{ fontSize: 12, color: 'var(--ink-2)', marginTop: 2 }}>
-                        {fmtDate(r.checkin)} → {fmtDate(r.checkout)}
+                  <div key={r.id} className="card" style={{ padding: '14px 16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      {r.platform_slug && (
+                        <span className={`plat ${PLAT_CLASS[r.platform_slug] ?? ''}`}>
+                          {PLAT_LETTER[r.platform_slug] ?? r.platform_slug[0]}
+                        </span>
+                      )}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--slate)' }}>{r.guest_name ?? 'Voyageur'}</div>
+                        <div style={{ fontSize: 12, color: 'var(--ink-2)', marginTop: 2 }}>
+                          {fmtDate(r.checkin)} → {fmtDate(r.checkout)}
+                        </div>
                       </div>
+                      <span className={`badge ${r.status === 'confirmed' ? 'badge-blue' : r.status === 'completed' ? 'badge-green' : 'badge-red'}`}>
+                        {r.status === 'confirmed' ? 'Confirmé' : r.status === 'completed' ? 'Terminé' : 'Annulé'}
+                      </span>
                     </div>
-                    <span className={`badge ${r.status === 'confirmed' ? 'badge-blue' : r.status === 'completed' ? 'badge-green' : 'badge-red'}`}>
-                      {r.status === 'confirmed' ? 'Confirmé' : r.status === 'completed' ? 'Terminé' : 'Annulé'}
-                    </span>
+                    {r.status === 'confirmed' && (
+                      <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
+                        <div style={{ position: 'relative', flex: 1 }}>
+                          <Phone size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-3)' }} />
+                          <input
+                            className="form-input"
+                            style={{ paddingLeft: 30, fontSize: 13, height: 34 }}
+                            placeholder="+225 07 00 00 00 00"
+                            value={phones[r.id] ?? ''}
+                            onChange={e => setPhones(p => ({ ...p, [r.id]: e.target.value }))}
+                          />
+                        </div>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          style={{ flexShrink: 0, gap: 5, fontSize: 12.5 }}
+                          disabled={!phones[r.id] || startingConv === r.id}
+                          onClick={() => startConversation(r.id)}
+                        >
+                          {startingConv === r.id ? '…' : <><Send size={12} /> Démarrer</>}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -249,6 +337,49 @@ export default function ApartmentDetailPage() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Agent IA tab */}
+        {tab === 'agent' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 600 }}>
+            <div className="panel">
+              <div className="panel-h"><h3>Informations ville & logement</h3></div>
+              <div className="panel-b" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <p style={{ fontSize: 13, color: 'var(--ink-2)', margin: 0 }}>
+                  L'agent IA utilise ces informations pour répondre aux questions des voyageurs sur la ville, les activités et le stationnement.
+                </p>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Description de la ville / du quartier</label>
+                  <textarea className="form-input" rows={4}
+                    placeholder="Ex: L'appartement est situé au cœur d'Abidjan, dans le quartier Cocody. À 10 min à pied du Plateau, le quartier des affaires. Transports en commun à 200m..."
+                    value={agentInfo.city_info}
+                    onChange={e => setAgentInfo(p => ({ ...p, city_info: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Activités et lieux à proximité</label>
+                  <textarea className="form-input" rows={4}
+                    placeholder="Ex: - Restaurant Le Maquis (5 min à pied) - Centre commercial Cap Sud (10 min voiture) - Plage de Bassam (45 min) - Musée des civilisations (15 min)..."
+                    value={agentInfo.activities_nearby}
+                    onChange={e => setAgentInfo(p => ({ ...p, activities_nearby: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Conseils parking / stationnement</label>
+                  <textarea className="form-input" rows={3}
+                    placeholder="Ex: Parking gratuit dans la rue le soir après 18h. Parking payant Carrefour Market à 200m (2€/h). Eviter la rue Nationale aux heures de pointe..."
+                    value={agentInfo.parking_tips}
+                    onChange={e => setAgentInfo(p => ({ ...p, parking_tips: e.target.value }))}
+                  />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button className="btn btn-primary" onClick={saveAgentInfo} disabled={savingAgent}>
+                    {savingAgent ? 'Enregistrement…' : 'Enregistrer'}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

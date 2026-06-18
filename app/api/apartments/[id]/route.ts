@@ -54,7 +54,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const tid = session.tenantId
   const body = await req.json()
 
-  const fields = ['name','address','floor','access_code','access_instructions','drive_link_photos','expected_cleaning_min']
+  const fields = ['name','address','floor','access_code','access_instructions','drive_link_photos','expected_cleaning_min','city_info','activities_nearby','parking_tips']
   const sets: string[] = []
   const vals: unknown[] = []
   let i = 1
